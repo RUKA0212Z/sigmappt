@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지각 방지 알고리즘 - 행렬 모델</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --text-color: #ffffff;
+            --accent-color: #4CAF50;
+            --matrix-color: #ffffff;
+            --trace-color: #ff4d4d; /* 대각합 강조 색상 (빨강) */
+            --transition-speed: 0.8s;
+            --cell-size: 80px; 
+        }
+code
+Code
+body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background: radial-gradient(circle at center, #1e1e1e 0%, #0a0a0a 100%);
+        color: var(--text-color);
+        font-family: 'Pretendard', -apple-system, sans-serif;
+        overflow: hidden;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+
+    /* --- [슬라이드 0] 도입부 디자인 --- */
+    #intro-screen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 1000; display: flex; flex-direction: column;
+        justify-content: center; align-items: center; gap: 50px;
+        transition: opacity 0.6s ease;
+    }
+    #intro-screen h1 {
+        font-size: 64px; letter-spacing: 8px; color: var(--accent-color);
+        display: flex; align-items: center; gap: 25px; margin-bottom: 10px;
+        text-shadow: 0 0 20px rgba(0, 255, 136, 0.4); font-weight: 900;
+    }
+    .sigma-symbol { font-size: 80px; font-family: serif; font-weight: normal; }
+    
+    .choice-container { display: flex; gap: 40px; }
+    .choice-box {
+        width: 280px; height: 280px; border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 25px; display: flex; flex-direction: column;
+        justify-content: center; align-items: center; gap: 15px;
+        font-size: 32px; font-weight: bold; color: #666;
+        cursor: pointer; transition: all 0.4s ease;
+        background: rgba(255,255,255,0.02); backdrop-filter: blur(10px);
+    }
+    .choice-box:hover {
+        border-color: var(--accent-color); color: white;
+        transform: translateY(-15px); box-shadow: 0 20px 40px rgba(76, 175, 80, 0.2);
+    }
+    .choice-box span { font-size: 14px; font-weight: normal; letter-spacing: 2px; color: #444; }
+
+    /* 발표 영역 초기 설정 */
+    .presentation-area { 
+        display: none; 
+        opacity: 0; 
+        transition: opacity 0.5s ease;
+        position: relative;
+        flex-direction: column; align-items: center; justify-content: center;
+        width: 100%; height: 100%;
+    }
+
+    /* 이전으로 버튼 */
+    #prev-btn {
+        display: none; 
+        position: fixed; top: 30px; left: 30px;
+        padding: 10px 20px; background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.2); color: #aaa;
+        border-radius: 8px; cursor: pointer; z-index: 1100;
+        transition: 0.3s; font-size: 14px;
+    }
+    #prev-btn:hover { background: rgba(255,255,255,0.15); color: white; border-color: white; }
+
+    /* 1~3단계 수식 줄 */
+    .equation-row {
+        display: flex; align-items: center; justify-content: center;
+        transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 2;
+    }
+    .matrix-box { position: relative; display: inline-block; transition: all var(--transition-speed) ease; }
+    table { border-collapse: collapse; transition: all var(--transition-speed) ease; }
+    td, th {
+        width: var(--cell-size); height: var(--cell-size);
+        padding: 0; text-align: center; font-size: 24px;
+        transition: all var(--transition-speed) ease; box-sizing: border-box;
+    }
+    th { color: var(--accent-color); font-weight: 600; }
+    .label { font-weight: 600; color: #666; text-align: right; padding-right: 20px; width: 100px; }
+
+    /* 행렬 괄호 */
+    .matrix-box::before, .matrix-box::after {
+        content: ''; position: absolute; top: 0; bottom: 0;
+        width: 15px; border: 3px solid var(--matrix-color);
+        opacity: 0; transition: all var(--transition-speed) ease;
+    }
+    .matrix-box::before { border-right: none; left: -10px; }
+    .matrix-box::after { border-left: none; right: -10px; }
+
+    .is-matrix th, .is-matrix .label { width: 0; height: 0; font-size: 0; padding: 0; opacity: 0; overflow: hidden; pointer-events: none; }
+    .is-matrix::before, .is-matrix::after { opacity: 1; }
+
+    .multiply-sign {
+        font-size: 40px; width: 0; opacity: 0; overflow: hidden;
+        text-align: center; transition: all var(--transition-speed) ease;
+        cursor: pointer; white-space: nowrap;
+    }
+    .selection-matrix { width: 0; opacity: 0; overflow: hidden; transform: translateX(50px); transition: all var(--transition-speed) ease; }
+    .step-3-active .multiply-sign { width: 100px; opacity: 1; margin: 0 20px; }
+    .step-3-active .selection-matrix { width: 320px; opacity: 1; transform: translateX(0); overflow: visible; }
+
+    /* 결과 구역 */
+    .result-area {
+        position: absolute; top: 60%; display: flex; flex-direction: column; align-items: center;
+        opacity: 0; transform: translateY(50px);
+        transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+    }
+    .down-arrow { font-size: 40px; color: var(--accent-color); margin-bottom: 20px; transition: opacity 0.5s; }
+    .step-4-active .equation-row { transform: translateY(-300px) scale(0.5); opacity: 0.3; }
+    .step-4-active .result-area { opacity: 1; transform: translateY(-300px); pointer-events: all; }
+    .step-5-active .equation-row { opacity: 0; transform: translateY(-200px) scale(0.5); pointer-events: none; }
+    .step-5-active .down-arrow { opacity: 0; }
+    .step-5-active .result-area { top: 40%; transform: translateY(-50%); }
+
+    .step-5-active .result-matrix tr:nth-child(1) td:nth-child(1),
+    .step-5-active .result-matrix tr:nth-child(2) td:nth-child(2),
+    .step-5-active .result-matrix tr:nth-child(3) td:nth-child(3),
+    .step-5-active .result-matrix tr:nth-child(4) td:nth-child(4) {
+        color: var(--trace-color); font-weight: bold;
+        text-shadow: 0 0 15px rgba(255, 77, 77, 0.6); transform: scale(1.1);
+    }
+
+    .formula-box {
+        margin-top: 40px; font-size: 40px; font-weight: bold;
+        display: flex; align-items: center; gap: 15px; opacity: 0;
+        transition: all var(--transition-speed) ease; cursor: pointer;
+    }
+    .step-6-active .formula-box { opacity: 1; }
+    .moving-num {
+        display: inline-block; color: var(--trace-color);
+        transition: all var(--transition-speed) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform: translateY(-200px) scale(1.5); opacity: 0;
+    }
+    .step-6-active .moving-num { transform: translateY(0) scale(1); opacity: 1; }
+    .sum-result { color: var(--accent-color); }
+
+    .conclusion-box {
+        margin-top: 35px; display: flex; flex-direction: column; align-items: center;
+        opacity: 0; transform: translateY(30px); transition: all var(--transition-speed) ease;
+    }
+    .step-7-active .conclusion-box { opacity: 1; transform: translateY(0); }
+    .verdict-info { font-size: 22px; color: #888; margin-bottom: 10px; }
+    .verdict-result {
+        font-size: 48px; font-weight: 900; color: #ff4d4d;
+        padding: 10px 40px; border: 3px solid #ff4d4d; border-radius: 50px;
+        animation: pulse-warn 1.5s infinite;
+    }
+    @keyframes pulse-warn {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 0px rgba(255, 77, 77, 0); }
+        50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(255, 77, 77, 0.4); }
+    }
+
+    .guide { position: fixed; bottom: 30px; color: #333; font-size: 13px; }
+    
+    /* [추가] 슬라이드 8 좌표계 전용 스타일 */
+    .coordinate-container {
+        width: 700px; height: 700px;
+        background: #000; /* 검은색 바탕 */
+        border: 2px solid #333;
+        border-radius: 8px;
+        box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
+    }
+    canvas { display: block; }
+    
+    /* 슬라이더 제어 박스 스타일 */
+        .controls-box {
+            margin-top: 30px;
+            width: 700px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 20px 30px;
+            border-radius: 15px;
+            border: 1px solid #222;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        input[type=range] {
+            flex-grow: 1;
+            accent-color: #ffa500; /* 주황색 포인트 */
+            cursor: pointer;
+        }
+        #w-value-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffa500;
+            min-width: 140px;
+            text-align: right;
+            font-family: monospace; /* 숫자 정렬을 위해 고정폭 사용 */
+        }
+        
+</style>
+</head>
+<body>
+    
+<button id="prev-btn" onclick="handleBack()">← 이전으로</button>
+
+<!-- 슬라이드 0 -->
+<div id="intro-screen">
+    <h1><span class="sigma-symbol">Σ</span> SIGMA</h1>
+    <div class="choice-container">
+        <div class="choice-box" onclick="startPresentation()">
+            <span>PHASE 01</span>
+            외출 전
+        </div>
+        <div class="choice-box" onclick="startAfterPresentation()">
+            <span>PHASE 02</span>
+            외출 후
+        </div>
+    </div>
+</div>
+
+<!-- PHASE 01 구역 -->
+<div class="presentation-area" id="p-area">
+    <div class="equation-row" id="equation-row">
+        <div class="matrix-box" id="data-matrix" onclick="handleStep2()">
+            <table>
+                <thead>
+                    <tr><th class="label"></th><th>多</th><th>　</th><th>　</th><th>少</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td class="label">단장</td><td>40</td><td>25</td><td>10</td><td>3</td></tr>
+                    <tr><td class="label">식사</td><td>20</td><td>10</td><td>5</td><td>0</td></tr>
+                    <tr><td class="label">청결</td><td>50</td><td>30</td><td>15</td><td>5</td></tr>
+                    <tr><td class="label">여가</td><td>9</td><td>6</td><td>3</td><td>0</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="multiply-sign" onclick="handleStep4()">×</div>
+        <div class="matrix-box is-matrix selection-matrix">
+            <table>
+                <tbody>
+                    <tr><td>0</td><td>1</td><td>0</td><td>0</td></tr>
+                    <tr><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+                    <tr><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+                    <tr><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="result-area" id="result-area" onclick="handleStep5()">
+        <div class="down-arrow">↓</div>
+        <div class="matrix-box is-matrix result-matrix">
+            <table>
+                <tbody>
+                    <tr><td>25</td><td>40</td><td>10</td><td>3</td></tr>
+                    <tr><td>10</td><td>20</td><td>5</td><td>0</td></tr>
+                    <tr><td>30</td><td>50</td><td>15</td><td>5</td></tr>
+                    <tr><td>6</td><td>9</td><td>3</td><td>0</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="formula-box" id="formula-box" onclick="handleStep7(event)">
+            <span class="moving-num" style="transition-delay: 0.1s;">25</span>
+            <span>+</span>
+            <span class="moving-num" style="transition-delay: 0.3s;">20</span>
+            <span>+</span>
+            <span class="moving-num" style="transition-delay: 0.5s;">15</span>
+            <span>+</span>
+            <span class="moving-num" style="transition-delay: 0.7s;">0</span>
+            <span class="sum-result">= tr(A)</span>
+        </div>
+        <div class="conclusion-box" id="conclusion-box">
+            <div class="verdict-info">Condition: tr(A) &lt; 50 min</div>
+            <div class="verdict-result">60 &gt; 50 (지각 위험!)</div>
+        </div>
+    </div>
+</div>
+
+    <!-- [추가] PHASE 02 구역 (슬라이드 8) -->
+    <div class="presentation-area" id="after-p-area">
+    <h2 style="margin-bottom: 30px; color: var(--accent-color); font-size: 28px; letter-spacing: 2px;">FATIGUE OPTIMIZATION</h2>
+    <div class="coordinate-container">
+        <canvas id="coordCanvas" width="700" height="700"></canvas>
+    </div>
+        <!-- [추가] W 조절 슬라이더 -->
+        <div class="controls-box">
+            <span style="color: #888; font-weight: bold;">Fatigue (W)</span>
+            <input type="range" id="w-slider" min="0" max="20" step="0.001" value="0">
+            <span id="w-value-display">W = 0.000</span>
+        </div>
+    </div>
+
+<script>
+let step = 0; 
+    const body = document.body;
+    const dataMatrix = document.getElementById('data-matrix');
+    const pArea = document.getElementById('p-area');
+    const afterArea = document.getElementById('after-p-area');
+    const intro = document.getElementById('intro-screen');
+    const prevBtn = document.getElementById('prev-btn');
+    const gCoeffX = 0.85;
+    const gCoeffY = 0.14;
+    const minW = 7.350; // 수학적으로 계산된 1사분면 최소 접점 W값
+    const SNAP_RANGE = 0.5; // 자석 효과 범위
+
+    // 1. 외출 전 시작 함수
+    function startPresentation() {
+        intro.style.opacity = '0';
+        setTimeout(() => {
+            intro.style.display = 'none';
+            pArea.style.display = 'flex';
+            prevBtn.style.display = 'block';
+            setTimeout(() => { pArea.style.opacity = '1'; }, 50);
+            step = 1;
+        }, 600);
+    }
+
+    function startAfterPresentation() {
+        intro.style.opacity = '0';
+        setTimeout(() => {
+            intro.style.display = 'none';
+            afterArea.style.display = 'flex';
+            prevBtn.style.display = 'block';
+            
+            const slider = document.getElementById('w-slider');
+            const display = document.getElementById('w-value-display');
+            
+            slider.addEventListener('input', function() {
+                let val = parseFloat(this.value);
+                
+                // [추가] 자석 효과 (Snap) 로직
+                if (Math.abs(val - minW) < SNAP_RANGE) {
+                    val = minW;
+                    this.value = minW; // 슬라이더 위치도 고정
+                }
+
+                display.innerText = `W = ${val.toFixed(3)}`;
+                drawCoordinate(val);
+            });
+
+            setTimeout(() => { afterArea.style.opacity = '1'; drawCoordinate(0); }, 50);
+            step = 8;
+        }, 600);
+    }
+
+// 3. 전체 그리기 함수 (W 값을 매개변수로 받음)
+    function drawCoordinate(W = 0) {
+        const canvas = document.getElementById('coordCanvas');
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        const center = w / 2;
+        const range = 30; 
+        const scale = center / range; 
+
+        ctx.clearRect(0, 0, w, h);
+
+        // --- 1. 그리드 및 축 (기존 동일) ---
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        for (let i = -range; i <= range; i += 5) {
+            ctx.beginPath();
+            ctx.moveTo(center + i * scale, 0); ctx.lineTo(center + i * scale, h); 
+            ctx.moveTo(0, center + i * scale); ctx.lineTo(w, center + i * scale); 
+            ctx.stroke();
+        }
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, center); ctx.lineTo(w, center); 
+        ctx.moveTo(center, 0); ctx.lineTo(center, h); 
+        ctx.stroke();
+        ctx.fillStyle = '#aaa';
+        ctx.font = '13px Arial';
+        for (let i = -range; i <= range; i += 5) {
+            if (i === 0) continue;
+            ctx.fillText(i, center + i * scale - 10, center + 25); 
+            ctx.fillText(i, center - 30, center - i * scale + 5); 
+        }
+        ctx.fillText('0', center - 15, center + 20);
+
+        // --- 2. 곡선 l (빨간색) ---
+        ctx.strokeStyle = '#ff4d4d'; 
+        ctx.lineWidth = 3;           
+        const drawCurvePart = (start, end) => {
+            ctx.beginPath();
+            let started = false;
+            for (let x = start; x <= end; x += 0.001) {
+                let y = (0.14 * x) / ((2/15) * x - 0.85);
+                if (y >= -30 && y <= 30) {
+                    let sx = center + x * scale;
+                    let sy = center - y * scale;
+                    if (!started) { ctx.moveTo(sx, sy); started = true; }
+                    else { ctx.lineTo(sx, sy); }
+                }
+            }
+            ctx.stroke();
+        }
+        drawCurvePart(-30, 6.3); // 3사분면 쪽
+        drawCurvePart(6.45, 30); // 1사분면 쪽
+
+        // --- [추가] 3. 직선 m : 0.85x + 0.14y = W (초록색) ---
+        ctx.strokeStyle = '#00ff88'; // 초록색 네온
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        // 두 점을 이용해 직선 그리기 (x = -30일 때와 +30일 때의 y값 계산)
+        let x1 = -30;
+        let y1 = (W - 0.85 * x1) / 0.14;
+        let x2 = 30;
+        let y2 = (W - 0.85 * x2) / 0.14;
+        
+        ctx.moveTo(center + x1 * scale, center - y1 * scale);
+        ctx.lineTo(center + x2 * scale, center - y2 * scale);
+        ctx.stroke();
+        
+        // --- [수정 완료] 5. 교점 계산 및 주황색 점 표시 ---
+        // 연립방정식: (1.7/15)x^2 - (0.7029 + (2/15)W)x + 0.85W = 0
+        let A_quad = 1.7 / 15;
+        let B_quad = -(0.7029 + (2/15) * W);
+        let C_quad = 0.85 * W;
+        let D = B_quad * B_quad - 4 * A_quad * C_quad; // 판별식
+
+        if (D >= -0.1) { // 교점이 존재할 가능성이 있을 때
+            let xValues = [];
+            // D가 0에 가깝거나 Snap 모드일 때는 접점 1개만 표시
+            if (Math.abs(W - minW) < 0.01 || D < 0.05) {
+                xValues.push(-B_quad / (2 * A_quad));
+            } else if (D > 0) {
+                // 일반적인 교점 2개
+                xValues.push((-B_quad + Math.sqrt(D)) / (2 * A_quad));
+                xValues.push((-B_quad - Math.sqrt(D)) / (2 * A_quad));
+            }
+
+            xValues.forEach(px => {
+                // 직선 m 식을 이용해 y값 도출: y = (W - 0.85x) / 0.14
+                let py = (W - 0.85 * px) / 0.14;
+                
+                // 좌표평면 범위(-30~30) 내에 있는 점만 출력
+                if (px >= 7 && px <= 30 || py >= 7 && py <= 30) {
+                    ctx.beginPath();
+                    ctx.fillStyle = '#ffa500'; // 주황색 점
+                    ctx.arc(center + px * scale, center - py * scale, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+        }
+    }
+
+    // 4. 단계별 핸들러
+    function handleStep2() {
+        if (step === 1) { dataMatrix.classList.add('is-matrix'); step = 2; }
+        else if (step === 2) { body.classList.add('step-3-active'); step = 3; }
+    }
+
+    function handleStep4() { if (step === 3) { body.classList.add('step-4-active'); step = 4; } }
+
+    function handleStep5() {
+        if (step === 4) { body.classList.add('step-5-active'); step = 5; }
+        else if (step === 5) { body.classList.add('step-6-active'); step = 6; }
+    }
+
+    function handleStep7(event) {
+        if (step === 6) { event.stopPropagation(); body.classList.add('step-7-active'); step = 7; }
+    }
+
+    // 5. 이전으로 버튼 로직 (중괄호 오류 수정 완료)
+    function handleBack() {
+        if (step === 1 || step === 8) {
+            pArea.style.opacity = '0';
+            afterArea.style.opacity = '0';
+            prevBtn.style.display = 'none';
+            setTimeout(() => {
+                pArea.style.display = 'none';
+                afterArea.style.display = 'none';
+                intro.style.display = 'flex';
+                setTimeout(() => intro.style.opacity = '1', 50);
+                step = 0;
+            }, 500);
+        } 
+        else if (step === 7) { body.classList.remove('step-7-active'); step = 6; }
+        else if (step === 6) { body.classList.remove('step-6-active'); step = 5; }
+        else if (step === 5) { body.classList.remove('step-5-active'); step = 4; }
+        else if (step === 4) { body.classList.remove('step-4-active'); step = 3; }
+        else if (step === 3) { body.classList.remove('step-3-active'); step = 2; }
+        else if (step === 2) { dataMatrix.classList.remove('is-matrix'); step = 1; }
+    }
+
+    // 6. 키보드 조작
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+            if (step === 0) startPresentation();
+            else if (step < 3) handleStep2();
+            else if (step === 3) handleStep4();
+            else if (step === 4 || step === 5) handleStep5();
+            else if (step === 6) handleStep7({stopPropagation: () => {}});
+        }
+        if (e.key === 'ArrowLeft') handleBack();
+    });
+</script>
+</body>
+</html>
